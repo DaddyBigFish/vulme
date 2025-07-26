@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+import sys
+import time
+from urllib.parse import quote_plus
+from datetime import datetime
+from rich.console import Console
+from rich.table import Table
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+
+# build your query from CLI args (default “apache”)
+query = " ".join(sys.argv[1:]) or "apache"
+url = f"https://cti.wazuh.com/vulnerabilities/cves?q={quote_plus(query)}"
+
+# headless chrome
+opts = Options()
+opts.add_argument("--headless")
+opts.add_argument("--disable-gpu")
+opts.add_argument("--no-sandbox")
+opts.add_argument("--disable-dev-shm-usage")
+
+driver = webdriver.Chrome(options=opts)
+driver.get(url)
+
+# click “show more” up to 20×, or until no new rows appear
+max_clicks = 20
+clicks = 0
+prev_count = 0
+
+while clicks < max_clicks:
+    try:
+        btn = WebDriverWait(driver, 0).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "a.show-more"))
+        )
+        btn.click()
+        clicks += 1
+#       time.sleep(1)
+
+        # count CVE entries now on the page
+        current_count = len(driver.find_elements(By.CSS_SELECTOR, "a.search-click-cell"))
+        if current_count == prev_count:
+            break  # nothing new loaded
+        prev_count = current_count
+
+    except:
+        break  # either timed out or no more button
+
+# parse
+soup = BeautifulSoup(driver.page_source, "html.parser")
+driver.quit()
+
+rows = []
+for cell in soup.select("a.search-click-cell"):
+    # CVE ID
+    cve = cell.select_one("dt").text.strip()
+
+    # description
+    desc = cell.select_one("div.cve-search-description").text.strip()
+
+    # published date
+    date_str = cell.select_one("li[title='Published date']").text.strip()
+    dt = datetime.strptime(date_str, "%Y/%m/%d")
+
+    # collect all CVSS3.1 scores and pick the highest
+    cvss3_scores = []
+    for li in cell.select("li.cve-metric"):
+        spans = li.find_all("span")
+        if len(spans) >= 2 and "CVSS3.1" in spans[1].text:
+            try:
+                cvss3_scores.append(float(spans[0].text))
+            except ValueError:
+                pass
+
+    if cvss3_scores:
+        top = max(cvss3_scores)
+        score_str = f"{top:.1f}"
+        metric_str = "CVSS3.1"
+    else:
+        score_str = ""
+        metric_str = ""
+
+    rows.append((dt, cve, desc, date_str, score_str, metric_str))
+
+# sort newest first
+rows.sort(key=lambda x: x[0], reverse=True)
+
+# render table
+
+caption = (
+    "Vulnerabilities identified for "
+    f"[medium_spring_green]{query}[/medium_spring_green]               "
+    "vulme by DaddyBigFish          "
+)
+
+table = Table(show_header=True, header_style="bold magenta", title=None, caption=caption, caption_style="grey35")
+for col in ["CVE", "Description", "Date", "Score", "Metric"]:
+    table.add_column(col)
+
+for _, cve, desc, date_str, score, metric in rows:
+    table.add_row(cve, desc, date_str, score, metric)
+
+Console().print(table)
