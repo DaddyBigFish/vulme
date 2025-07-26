@@ -1,5 +1,5 @@
 # vulme
-**Querying CVEs from the command line.**
+**Querying CVEs from the command line.**     
 <img src="https://github.com/user-attachments/assets/502369e5-0489-4de4-89a1-00beea33720e" alt="vulme" width="200"/>     
 
 # Description
