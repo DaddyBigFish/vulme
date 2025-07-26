@@ -1,5 +1,4 @@
-<img src="https://github.com/user-attachments/assets/502369e5-0489-4de4-89a1-00beea33720e" alt="vulme" width="150"/>      
-
+<img src="https://github.com/user-attachments/assets/502369e5-0489-4de4-89a1-00beea33720e" alt="vulme" width="200"/>      
 # Description
 The tool vulme was designed to aid in the search for existing vulnerabilities by querying WAZUH's CVE database directly from the command line.
 # Installation
